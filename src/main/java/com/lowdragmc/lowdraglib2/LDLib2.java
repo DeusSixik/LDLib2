@@ -1,5 +1,7 @@
 package com.lowdragmc.lowdraglib2;
 
+import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
+import com.lowdragmc.lowdraglib2.gui.ui.event.UIEvents;
 import net.minecraft.client.Minecraft;
 import net.minecraft.util.RandomSource;
 import net.minecraft.resources.ResourceLocation;
@@ -13,6 +15,7 @@ import com.lowdragmc.lowdraglib2.core.mixins.MixinPluginShared;
 import com.lowdragmc.lowdraglib2.client.ClientProxy;
 import com.google.gson.GsonBuilder;
 import com.google.gson.Gson;
+import net.sixik.ga_profiler.Profiler;
 import org.slf4j.LoggerFactory;
 import org.slf4j.Logger;
 
@@ -32,6 +35,8 @@ public class LDLib2 {
     public static final Gson GSON = new GsonBuilder().create();
     private static File assetsLocation;
 
+    public static Profiler.Section SECTION;
+
     public LDLib2(IEventBus eventBus, ModContainer modContainer) {
         LDLib2.init();
         new CommonProxy(eventBus);
@@ -41,6 +46,32 @@ public class LDLib2 {
         if (Platform.isDevEnv()) {
             ModCreativeModeTab.register(eventBus);
         }
+
+        Profiler.setDisplayUnit(Profiler.TimeUnit.NANOSECONDS);
+
+        SECTION = Profiler.register(
+                "render.graph_toolkit",
+                "EditorWindow::drawInBackground",
+                5000
+        );
+
+
+    }
+
+    public static void listener(UIElement element) {
+        final int[] dumpDelayTicks = {20 * 60};
+        element.addEventListener(UIEvents.TICK, e -> {
+            if (--dumpDelayTicks[0] > 0) {
+                int time = dumpDelayTicks[0];
+                if(time % 100 == 0)
+                    System.out.println("Profiler Dump in " + time / 100 + "s");
+
+                return;
+            }
+            Profiler.dump("graph_path.dump");
+            System.out.println("Profiler Dump");
+            element.removeEventListener(UIEvents.TICK, e.currentListener);
+        });
     }
 
     public static void init() {

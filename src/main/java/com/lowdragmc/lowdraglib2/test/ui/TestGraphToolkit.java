@@ -1,8 +1,10 @@
 package com.lowdragmc.lowdraglib2.test.ui;
 
+import com.lowdragmc.lowdraglib2.LDLib2;
 import com.lowdragmc.lowdraglib2.gui.ui.ModularUI;
 import com.lowdragmc.lowdraglib2.gui.ui.UI;
 import com.lowdragmc.lowdraglib2.gui.ui.UIElement;
+import com.lowdragmc.lowdraglib2.gui.ui.rendering.GUIContext;
 import com.lowdragmc.lowdraglib2.gui.ui.styletemplate.Sprites;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.api.graph.Graph;
 import com.lowdragmc.lowdraglib2.nodegraphtookit.gui.GraphView;
@@ -14,6 +16,7 @@ import com.lowdragmc.lowdraglib2.test.noddegraphtoolkit.TestGraph;
 import com.lowdragmc.lowdraglib2.test.noddegraphtoolkit.TestStringConcatNode;
 import lombok.NoArgsConstructor;
 import net.minecraft.world.entity.player.Player;
+import net.sixik.ga_profiler.Profiler;
 import org.jetbrains.annotations.NotNull;
 import org.joml.Vector2f;
 
@@ -22,7 +25,16 @@ import org.joml.Vector2f;
 public class TestGraphToolkit implements IMenuTest {
     @Override
     public ModularUI createUI(@NotNull Player entityPlayer) {
-        var root = new UIElement();
+        var root = new UIElement() {
+            @Override
+            public void drawInBackground(GUIContext guiContext) {
+                try(Profiler.ProfileScope scope = Profiler.scope(LDLib2.SECTION)) {
+                    super.drawInBackground(guiContext);
+                }
+            }
+        };
+        LDLib2.listener(root);
+
         root.layout(layout -> {
             layout.widthPercent(75);
             layout.heightPercent(100);
