@@ -68,7 +68,7 @@ public class LDLib2 {
 
                 return;
             }
-            Profiler.dump("graph_path.dump");
+            Profiler.dump("graph_no_path.dump");
             System.out.println("Profiler Dump");
             element.removeEventListener(UIEvents.TICK, e.currentListener);
         });
