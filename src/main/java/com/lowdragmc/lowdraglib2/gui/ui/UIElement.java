@@ -1748,7 +1748,7 @@ public class UIElement implements IConfigurable, IPersistedSerializable, ILDLReg
      * <li> 3. Overlay
      * <li> 4. Children
      */
-    public final void drawInBackground(GUIContext guiContext) {
+    public void drawInBackground(GUIContext guiContext) {
         var display = taffyStyle.style.display;
         var opacity = style.opacity();
         if (display == TaffyDisplay.NONE || !isVisible() || opacity == 0) {

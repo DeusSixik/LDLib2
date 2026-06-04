@@ -16,6 +16,7 @@ import com.lowdragmc.lowdraglib2.gui.ui.data.TextWrap;
 import com.lowdragmc.lowdraglib2.gui.ui.rendering.GUIContext;
 import com.lowdragmc.lowdraglib2.gui.ui.style.StyleOrigin;
 import com.lowdragmc.lowdraglib2.gui.util.WindowDragHelper;
+import com.mojang.authlib.GameProfile;
 import dev.vfyjxf.taffy.style.AlignItems;
 import dev.vfyjxf.taffy.style.FlexDirection;
 import dev.vfyjxf.taffy.style.TaffyPosition;
@@ -24,6 +25,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.components.toasts.SystemToast;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
+import net.sixik.ga_profiler.Profiler;
 import org.appliedenergistics.yoga.*;
 import org.joml.Vector2f;
 
@@ -127,6 +129,9 @@ public class EditorWindow extends UIElement {
 
         addChild(window);
         createNewEditor(editorCreator);
+
+        LDLib2.listener(this);
+
     }
 
     @Override
@@ -362,6 +367,15 @@ public class EditorWindow extends UIElement {
         super.drawBackgroundAdditional(guiContext);
         if (window.isSelfOrChildHover() && !isResizing && !isMaximized()) {
             WindowDragHelper.drawResizeIcon(guiContext, window, 4);
+        }
+    }
+
+
+
+    @Override
+    public void drawInBackground(GUIContext guiContext) {
+        try(Profiler.ProfileScope scope = Profiler.scope(LDLib2.SECTION)) {
+            super.drawInBackground(guiContext);
         }
     }
 }
