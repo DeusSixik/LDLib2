@@ -1,0 +1,509 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>GaProfiler Comparison Dashboard</title>
+    <script src="https://cdn.jsdelivr.net/npm/apexcharts"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600&family=JetBrains+Mono&display=swap" rel="stylesheet">
+    <script src="https://unpkg.com/@popperjs/core@2"></script>
+    <script src="https://unpkg.com/tippy.js@6"></script>
+    <style>
+        body { background: #0f172a; color: #f8fafc; font-family: 'Inter', sans-serif; margin: 0; padding: 20px; }
+        .container { max-width: 1200px; margin: 0 auto; }
+        .header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px; border-bottom: 1px solid #334155; padding-bottom: 20px; }
+        h1 { color: #38bdf8; margin: 0; font-weight: 600; font-size: 28px; }
+        .card { background: #1e293b; border-radius: 12px; padding: 24px; box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1); border: 1px solid #334155; margin-bottom: 24px; }
+        table { width: 100%; border-collapse: collapse; }
+        th { text-align: left; padding: 12px 16px; border-bottom: 2px solid #334155; color: #94a3b8; font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; }
+        td { padding: 14px 16px; border-bottom: 1px solid #334155; cursor: pointer; transition: all 0.2s; }
+        tr:hover td { background: #1e293b; color: #38bdf8; }
+        tr.selected td { background: #0ea5e922 !important; color: #38bdf8; border-bottom-color: #0ea5e9; }
+        .val { font-family: 'JetBrains Mono', monospace; font-size: 13px; }
+        .delta-better { color: #22c55e; }
+        .delta-worse { color: #f87171; }
+        .delta-neutral { color: #cbd5e1; }
+        .specs-list { list-style: none; padding: 0; margin: 0; text-align: right; font-size: 12px; color: #f8fafc; }
+        .spec-item { margin-bottom: 2px; border-bottom: 1px solid #1e293b; padding-bottom: 2px; }
+        .spec-item:last-child { border-bottom: none; }
+        .header-left { display: flex; flex-direction: column; gap: 4px; }
+        .header-right { display: flex; align-items: center; gap: 20px; }
+        .hint { color: #64748b; font-size: 14px; text-align: center; margin-top: 10px; }
+        #current-section-name { color: #38bdf8; font-weight: 600; font-size: 18px; }
+        .controls { display: flex; gap: 10px; align-items: center; margin-bottom: 16px; flex-wrap: wrap; }
+        .mode-button { background: #334155; color: #f8fafc; border: none; padding: 8px 16px; border-radius: 999px; cursor: pointer; font-size: 14px; transition: background 0.2s; }
+        .mode-button:hover { background: #475569; }
+        .mode-button.active { background: #0ea5e9; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <div class="header-left">
+                <h1>GaProfiler Comparison</h1>
+                <div id="current-section-name">Select a section</div>
+            </div>
+            <div class="header-right">
+                <ul class="specs-list">
+                    <li class="spec-item">Ryzen Threadripper 1950X</li>
+                    <li class="spec-item">RTX 5070</li>
+                    <li class="spec-item">RAM 64 GB (10 GB assigned)</li>
+                    <li class="spec-item">NVMe SSD</li>
+                </ul>
+            </div>
+        </div>
+        <div class="controls card" style="padding: 16px 24px;">
+            <span>Report Mode:</span>
+            <button class="mode-button" id="mode-executionTime" onclick="setMode('executionTime')">Code Execution Time</button>
+            <button class="mode-button" id="mode-memoryAllocation" onclick="setMode('memoryAllocation')">Code Memory Allocation</button>
+        </div>
+        <div class="controls card" style="padding: 16px 24px;">
+            <span>Sort Groups By:</span>
+            <button class="mode-button group-sort-button active" id="group-sort-none" onclick="setGroupSort('none')">Original</button>
+            <button class="mode-button group-sort-button" id="group-sort-min" onclick="setGroupSort('min')">Min</button>
+            <button class="mode-button group-sort-button" id="group-sort-median" onclick="setGroupSort('median')">Median</button>
+            <button class="mode-button group-sort-button" id="group-sort-avg" onclick="setGroupSort('avg')">Avg</button>
+            <button class="mode-button group-sort-button" id="group-sort-p95" onclick="setGroupSort('p95')">P95</button>
+            <button class="mode-button group-sort-button" id="group-sort-max" onclick="setGroupSort('max')">Max</button>
+            <span style="margin-left: 16px;">Direction:</span>
+            <button class="mode-button group-direction-button active" id="group-direction-asc" onclick="setSortDirection('asc')">Ascending</button>
+            <button class="mode-button group-direction-button" id="group-direction-desc" onclick="setSortDirection('desc')">Descending</button>
+            <span style="margin-left: 16px;">Baseline Run:</span>
+            <select id="baseline-run-select" onchange="setBaselineRun(this.value)" style="margin-left: 8px; background: #0f172a; color: #f8fafc; border: 1px solid #334155; border-radius: 10px; padding: 10px 14px;">
+                <option value="">Off</option>
+                <option value="LDLib">LDLib</option>
+                <option value="LDLib Path">LDLib Path</option>
+            </select>
+        </div>
+        <div class="controls card" style="padding: 16px 24px;">
+            <span>Visible Metrics:</span>
+            <button class="mode-button metric-visibility-button active" id="visible-metric-min" onclick="toggleMetricVisibility('min')">Min</button>
+            <button class="mode-button metric-visibility-button active" id="visible-metric-median" onclick="toggleMetricVisibility('median')">Median</button>
+            <button class="mode-button metric-visibility-button active" id="visible-metric-avg" onclick="toggleMetricVisibility('avg')">Avg</button>
+            <button class="mode-button metric-visibility-button active" id="visible-metric-p95" onclick="toggleMetricVisibility('p95')">P95</button>
+            <button class="mode-button metric-visibility-button active" id="visible-metric-max" onclick="toggleMetricVisibility('max')">Max</button>
+        </div>
+        <div class="card"><div id="chart"></div></div>
+        <div class="card" style="padding: 0; overflow: hidden;">
+            <table>
+                <thead id="table-head"></thead>
+                <tbody id="table-body"></tbody>
+            </table>
+        </div>
+        <div class="hint">Compare each section by runtime cost or allocation pressure across multiple runs.</div>
+    </div>
+    <script>
+        const reportModes = {
+            'executionTime': {label: 'Code Execution Time', axisLabel: 'Time (ms)', columns: ['Calls', 'Min', 'Median', 'Avg', 'P95', 'Max', 'Total']},
+            'memoryAllocation': {label: 'Code Memory Allocation', axisLabel: 'Allocated Memory', columns: ['Calls', 'Min Alloc', 'Median Alloc', 'Avg Alloc', 'P95 Alloc', 'Max Alloc', 'Total Alloc']},
+        };
+        const chartSpecs = ['Ryzen Threadripper 1950X', 'RTX 5070', 'RAM 64 GB (10 GB assigned)', 'NVMe SSD'];
+        const comparisonSections = [
+            { name: 'render.editor', tooltip: 'EditorWindow::drawInBackground', runs: [{ label: 'LDLib', executionTime: { supported: true, unavailable: '', count: 5000, min: 0.379600, median: 8.689650, avg: 7.502757, p95: 11.669300, max: 29.993800, total: 37513.785900 }, memoryAllocation: { supported: false, unavailable: 'Disabled', count: 0, min: 0.000000, median: 0.000000, avg: 0.000000, p95: 0.000000, max: 0.000000, total: 0.000000 } }, { label: 'LDLib Path', executionTime: { supported: true, unavailable: '', count: 5000, min: 0.298600, median: 5.759200, avg: 5.067001, p95: 10.322800, max: 23.949200, total: 25335.005300 }, memoryAllocation: { supported: false, unavailable: 'Disabled', count: 0, min: 0.000000, median: 0.000000, avg: 0.000000, p95: 0.000000, max: 0.000000, total: 0.000000 } }] },
+            { name: 'render.graph_toolkit', tooltip: 'EditorWindow::drawInBackground', runs: [{ label: 'LDLib', executionTime: { supported: true, unavailable: '', count: 5000, min: 0.503200, median: 0.675300, avg: 0.730669, p95: 0.983600, max: 31.815100, total: 3653.346100 }, memoryAllocation: { supported: false, unavailable: 'Disabled', count: 0, min: 0.000000, median: 0.000000, avg: 0.000000, p95: 0.000000, max: 0.000000, total: 0.000000 } }, { label: 'LDLib Path', executionTime: { supported: true, unavailable: '', count: 5000, min: 0.456100, median: 0.666100, avg: 0.695465, p95: 0.927600, max: 22.338400, total: 3477.326400 }, memoryAllocation: { supported: false, unavailable: 'Disabled', count: 0, min: 0.000000, median: 0.000000, avg: 0.000000, p95: 0.000000, max: 0.000000, total: 0.000000 } }] }
+        ];
+        function escapeHtml(value) { return (value || '').replaceAll('&', '&amp;').replaceAll('<', '&lt;').replaceAll('>', '&gt;').replaceAll('\"', '&quot;'); }
+        const chartMetricDefinitions = [
+            { key: 'min', label: 'Min' },
+            { key: 'median', label: 'Median' },
+            { key: 'avg', label: 'Avg' },
+            { key: 'p95', label: 'P95' },
+            { key: 'max', label: 'Max' }
+        ];
+        function formatMetricValue(value, modeKey) {
+            if (modeKey === 'executionTime') {
+                return value.toFixed(2) + ' ms';
+            }
+            if (value < 1024) { return value.toFixed(0) + ' B'; }
+            if (value < 1024 * 1024) { return (value / 1024).toFixed(2) + ' KB'; }
+            if (value < 1024 * 1024 * 1024) { return (value / (1024 * 1024)).toFixed(2) + ' MB'; }
+            return (value / (1024 * 1024 * 1024)).toFixed(2) + ' GB';
+        }
+        function formatSignedMetricValue(value, modeKey) {
+            const sign = value > 0 ? '+' : value < 0 ? '-' : '';
+            return sign + formatMetricValue(Math.abs(value), modeKey);
+        }
+        function formatChartBarValue(value, modeKey) {
+            if (modeKey === 'executionTime') {
+                return value.toFixed(2);
+            }
+            return formatMetricValue(value, modeKey);
+        }
+        function buildSectionDisplayName(sectionName) {
+            return sectionName + ' (' + currentModeDisplayHint() + ', lower is better)';
+        }
+        function buildSectionChartTitle(sectionName) {
+            return sectionName + ' (' + currentModeDisplayHint() + ')';
+        }
+        function buildSectionSubtitle(baseSubtitle) {
+            return (baseSubtitle ? baseSubtitle + ' • ' : '') + 'Lower is better';
+        }
+        function currentModeDisplayHint() {
+            if (currentMode === 'executionTime') {
+                return 'ms';
+            }
+            return 'allocated memory';
+        }
+        function getVisibleMetricKeys() {
+            return chartMetricDefinitions.filter(metric => visibleChartMetrics[metric.key]).map(metric => metric.key);
+        }
+        function getVisibleMetricCategories() {
+            return chartMetricDefinitions.filter(metric => visibleChartMetrics[metric.key]).map(metric => metric.label);
+        }
+        function buildChartSeriesData(metric) {
+            return getVisibleMetricKeys().map(metricKey => metric[metricKey]);
+        }
+        function shouldRenderDataLabel(value, opts) {
+            const series = opts && opts.w && opts.w.config && Array.isArray(opts.w.config.series) ? opts.w.config.series : [];
+            let maxValue = 0;
+            series.forEach(entry => (entry.data || []).forEach(point => { if (typeof point === 'number' && point > maxValue) { maxValue = point; } }));
+            if (maxValue <= 0) { return true; }
+            return value >= maxValue * 0.18;
+        }
+        function shouldRenderInsideChartDataLabel(value, opts) {
+            return shouldRenderDataLabel(value, opts);
+        }
+        function buildDeltaPercentLabel(value, baselineValue) {
+            if (baselineValue === null || baselineValue === undefined || baselineValue <= 0) { return ''; }
+            const percentDelta = ((value - baselineValue) / baselineValue) * 100;
+            if (Math.abs(percentDelta) < 0.05) { return '0%'; }
+            const absolutePercent = Math.abs(percentDelta);
+            const rounded = absolutePercent >= 10 ? absolutePercent.toFixed(0) : absolutePercent.toFixed(1);
+            const sign = percentDelta > 0 ? '+' : '-';
+            return sign + rounded + '%';
+        }
+        function buildComparisonSeries(runs) {
+            return runs.map(run => ({
+                name: buildComparisonSeriesName(run),
+                data: buildChartSeriesDataForRun(run[currentMode])
+            }));
+        }
+        function buildChartSeriesDataForRun(metric) {
+            return getVisibleMetricKeys().map(metricKey => metric[metricKey]);
+        }
+        function metricKeyAtIndex(dataPointIndex) {
+            return getVisibleMetricKeys()[dataPointIndex] || null;
+        }
+        function buildComparisonSeriesName(run) {
+            return baselineRunLabel && run.label === baselineRunLabel && !run.label.includes('(Baseline)') ? run.label + ' (Baseline)' : run.label;
+        }
+        function buildComparisonSeriesColors(runs) {
+            const mutedPalette = ['#22c55e', '#f59e0b', '#14b8a6', '#a855f7', '#f97316', '#0ea5e9'];
+            let colorIndex = 0;
+            return runs.map(run => {
+                if (baselineRunLabel && run.label === baselineRunLabel) {
+                    return '#38bdf8';
+                }
+                const color = mutedPalette[colorIndex % mutedPalette.length];
+                colorIndex += 1;
+                return color;
+            });
+        }
+        function buildComparisonSeriesOpacities(runs) {
+            if (!baselineRunLabel) { return runs.map(() => 0.92); }
+            return runs.map(run => run.label === baselineRunLabel ? 1 : 0.58);
+        }
+        function getComparisonMetricKey() {
+            return currentGroupSort === 'none' ? 'avg' : currentGroupSort;
+        }
+        function getComparisonMetricHeader() {
+            const metricKey = getComparisonMetricKey();
+            if (metricKey === 'min') { return 'Best Min'; }
+            if (metricKey === 'median') { return 'Best Median'; }
+            if (metricKey === 'p95') { return 'Best P95'; }
+            if (metricKey === 'max') { return 'Best Max'; }
+            return 'Best Avg';
+        }
+        function renderBaselineHeaderCell() {
+            return baselineRunLabel ? '<th>Delta vs Baseline</th>' : '';
+        }
+        function renderBaselineValueCell(runs, bestValue, metricKey) {
+            if (!baselineRunLabel) { return ''; }
+            const baselineRun = runs.find(run => run.label === baselineRunLabel);
+            if (!baselineRun) { return '<td class="val">Unavailable</td>'; }
+            if (!baselineRun[currentMode].supported) { return '<td class="val">' + unavailableFromRuns([baselineRun]) + '</td>'; }
+            if (bestValue === null) { return '<td class="val">' + unavailableFromRuns(runs) + '</td>'; }
+            const baselineValue = baselineRun[currentMode][metricKey];
+            const delta = bestValue - baselineValue;
+            const percentDelta = baselineValue === 0 ? null : (delta / baselineValue) * 100;
+            const percentText = percentDelta === null ? 'n/a' : (percentDelta > 0 ? '+' : '') + percentDelta.toFixed(2) + '%';
+            return '<td class="val ' + baselineDeltaClass(percentDelta) + '">' + formatSignedMetricValue(delta, currentMode) + ' (' + percentText + ')</td>';
+        }
+        function baselineDeltaClass(percentDelta) {
+            if (percentDelta === null || Math.abs(percentDelta) < 1.0) { return 'delta-neutral'; }
+            return percentDelta < 0 ? 'delta-better' : 'delta-worse';
+        }
+        function deltaPercentColor(percentLabel) {
+            if (!percentLabel || percentLabel === '0%') { return '#cbd5e1'; }
+            return percentLabel.startsWith('-') ? '#22c55e' : '#f87171';
+        }
+        function buildBaseChartOptions(mode, subtitle) {
+            return {
+                title: { text: '', align: 'left', style: { color: '#38bdf8', fontSize: '20px' } },
+                subtitle: { text: subtitle || '', align: 'left', style: { color: '#94a3b8', fontSize: '14px' } },
+                chart: { type: 'bar', height: 360, background: '#1e293b', animations: { enabled: false }, toolbar: { show: true, tools: { download: true, selection: false, zoom: false, zoomin: false, zoomout: false, pan: false, reset: false } }, events: { mounted: () => queueCustomChartLabelRender(), updated: () => queueCustomChartLabelRender() } },
+                annotations: { texts: [{ x: '98%', y: 44, text: chartSpecs.join(' | '), textAnchor: 'end', style: { fontSize: '10px', fontFamily: 'Inter', color: '#f8fafc' } }] },
+                series: [],
+                colors: ['#10b981', '#f59e0b', '#14b8a6', '#38bdf8', '#f97316', '#a855f7'],
+                plotOptions: { bar: { columnWidth: '55%', borderRadius: 6, dataLabels: { position: 'center' } } },
+                grid: { borderColor: '#334155', strokeDashArray: 4, padding: { top: 72 } },
+                theme: { mode: 'dark' },
+                legend: { position: 'top', horizontalAlign: 'center', labels: { colors: '#f8fafc' } },
+                xaxis: { categories: [], labels: { style: { colors: '#94a3b8', fontSize: '12px' } }, axisBorder: { show: false }, axisTicks: { show: false } },
+                noData: { text: '', align: 'center', verticalAlign: 'middle', style: { color: '#f8fafc' } }
+            };
+        }
+        function renderChart(options) {
+            const chartDiv = document.querySelector('#chart');
+            if (chart) { chart.destroy(); }
+            chart = new ApexCharts(chartDiv, options);
+            Promise.resolve(chart.render()).then(() => queueCustomChartLabelRender());
+        }
+        function queueCustomChartLabelRender() {
+            if (customLabelRenderTimer) { clearTimeout(customLabelRenderTimer); }
+            customLabelRenderTimer = setTimeout(() => {
+                customLabelRenderTimer = null;
+                renderCustomChartLabels();
+            }, 80);
+        }
+        function renderCustomChartLabels() {
+            const svg = document.querySelector('#chart .apexcharts-svg');
+            if (!svg || !currentChartSeriesMeta.length) { return; }
+            svg.querySelectorAll('.ga-custom-chart-labels').forEach(node => node.remove());
+            const inner = svg.querySelector('.apexcharts-inner') || svg;
+            const labelLayer = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+            labelLayer.setAttribute('class', 'ga-custom-chart-labels');
+            const percentLabelY = 18;
+            const baselineSeriesIndex = currentChartSeriesMeta.findIndex(item => baselineRunLabel && item.rawLabel === baselineRunLabel);
+            const seriesGroups = Array.from(svg.querySelectorAll('.apexcharts-bar-series .apexcharts-series'));
+            if (!seriesGroups.length) { return; }
+            seriesGroups.forEach(seriesGroup => {
+                if (!seriesGroup || seriesGroup.classList.contains('apexcharts-series-collapsed')) { return; }
+                const rel = parseInt(seriesGroup.getAttribute('rel') || '0', 10);
+                const seriesMetaIndex = Number.isFinite(rel) && rel > 0 ? rel - 1 : -1;
+                const seriesMeta = currentChartSeriesMeta[seriesMetaIndex];
+                if (!seriesMeta || !Array.isArray(seriesMeta.data)) { return; }
+                const groupPaths = Array.from(seriesGroup.querySelectorAll('path'));
+                groupPaths.forEach((barPath, dataPointIndex) => {
+                    const bounds = extractBarBounds(barPath);
+                    if (!bounds) { return; }
+                    const valueLabel = buildBarValueLabel(seriesMeta, dataPointIndex);
+                    if (valueLabel) {
+                        renderBarValueBadge(labelLayer, bounds, valueLabel, baselineSeriesIndex >= 0, seriesMetaIndex, currentChartSeriesMeta.length);
+                    }
+                    const percentLabel = buildBarDeltaLabel(currentChartSeriesMeta, seriesMetaIndex, dataPointIndex, baselineSeriesIndex);
+                    if (!percentLabel) { return; }
+                    const anchor = extractBarLabelAnchor(barPath);
+                    if (!anchor) { return; }
+                    appendSvgText(labelLayer, anchor.x, percentLabelY, percentLabel, deltaPercentColor(percentLabel), '9px');
+                });
+            });
+            inner.appendChild(labelLayer);
+        }
+        function buildBarValueLabel(seriesMeta, dataPointIndex) {
+            if (!seriesMeta || !Array.isArray(seriesMeta.data)) { return ''; }
+            const value = seriesMeta.data[dataPointIndex];
+            if (typeof value !== 'number' || !Number.isFinite(value)) { return ''; }
+            return formatChartBarValue(value, currentMode);
+        }
+        function renderBarValueBadge(layer, bounds, text, reserveTopBand, seriesIndex, totalSeriesCount) {
+            const badgeHeight = 16;
+            const stackOffset = totalSeriesCount > 1 ? seriesIndex * 14 : 0;
+            const minimumTop = reserveTopBand ? 34 : 22;
+            const insideBadgeTop = Math.max(minimumTop, bounds.maxY - badgeHeight - 3 - stackOffset);
+            const outsideBadgeTop = Math.max(minimumTop, bounds.minY - badgeHeight - 5 - stackOffset);
+            const badgeTop = bounds.height >= 28 ? insideBadgeTop : outsideBadgeTop;
+            appendSvgBadge(layer, bounds.centerX, badgeTop, text, '#020617', '#f8fafc', '9px');
+        }
+        function appendSvgBadge(layer, centerX, topY, text, backgroundColor, textColor, fontSize) {
+            const fontSizeValue = parseFloat(fontSize);
+            const horizontalPadding = 5;
+            const badgeHeight = Math.max(16, fontSizeValue + 6);
+            const badgeWidth = Math.max(30, (text.length * fontSizeValue * 0.62) + (horizontalPadding * 2));
+            const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+            rect.setAttribute('x', (centerX - (badgeWidth / 2)).toFixed(2));
+            rect.setAttribute('y', topY.toFixed(2));
+            rect.setAttribute('width', badgeWidth.toFixed(2));
+            rect.setAttribute('height', badgeHeight.toFixed(2));
+            rect.setAttribute('rx', '5');
+            rect.setAttribute('ry', '5');
+            rect.setAttribute('fill', backgroundColor);
+            rect.setAttribute('fill-opacity', '0.86');
+            rect.setAttribute('stroke', '#e2e8f0');
+            rect.setAttribute('stroke-opacity', '0.18');
+            layer.appendChild(rect);
+            const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            label.setAttribute('x', centerX.toFixed(2));
+            label.setAttribute('y', (topY + (badgeHeight / 2) + 0.5).toFixed(2));
+            label.setAttribute('fill', textColor);
+            label.setAttribute('font-size', fontSize);
+            label.setAttribute('font-family', 'JetBrains Mono, monospace');
+            label.setAttribute('font-weight', '600');
+            label.setAttribute('text-anchor', 'middle');
+            label.setAttribute('dominant-baseline', 'middle');
+            label.textContent = text;
+            layer.appendChild(label);
+        }
+        function extractBarBounds(barPath) {
+            const pathData = barPath && typeof barPath.getAttribute === 'function' ? barPath.getAttribute('d') : '';
+            if (!pathData) { return null; }
+            const coordinates = pathData.match(/-?\d*\.?\d+/g);
+            if (!coordinates || coordinates.length < 4) { return null; }
+            let minX = Number.POSITIVE_INFINITY;
+            let maxX = Number.NEGATIVE_INFINITY;
+            let minY = Number.POSITIVE_INFINITY;
+            let maxY = Number.NEGATIVE_INFINITY;
+            for (let i = 0; i + 1 < coordinates.length; i += 2) {
+                const x = parseFloat(coordinates[i]);
+                const y = parseFloat(coordinates[i + 1]);
+                if (!Number.isFinite(x) || !Number.isFinite(y)) { continue; }
+                minX = Math.min(minX, x);
+                maxX = Math.max(maxX, x);
+                minY = Math.min(minY, y);
+                maxY = Math.max(maxY, y);
+            }
+            if (!Number.isFinite(minX) || !Number.isFinite(maxX) || !Number.isFinite(minY) || !Number.isFinite(maxY)) { return null; }
+            return { minX: minX, maxX: maxX, minY: minY, maxY: maxY, width: maxX - minX, height: maxY - minY, centerX: (minX + maxX) / 2 };
+        }
+        function extractBarLabelAnchor(barPath) {
+            const bounds = extractBarBounds(barPath);
+            if (!bounds) { return null; }
+            return { x: bounds.centerX, y: bounds.minY };
+        }
+        function buildBarDeltaLabel(series, seriesIndex, dataPointIndex, baselineSeriesIndex) {
+            if (baselineSeriesIndex < 0 || seriesIndex === baselineSeriesIndex) { return ''; }
+            const baselineSeries = series[baselineSeriesIndex];
+            const seriesEntry = series[seriesIndex];
+            if (!baselineSeries || !seriesEntry) { return ''; }
+            const baselineValue = Array.isArray(baselineSeries.data) ? baselineSeries.data[dataPointIndex] : null;
+            const value = Array.isArray(seriesEntry.data) ? seriesEntry.data[dataPointIndex] : null;
+            if (typeof baselineValue !== 'number' || typeof value !== 'number') { return ''; }
+            return buildDeltaPercentLabel(value, baselineValue);
+        }
+        function appendSvgText(layer, x, y, text, color, fontSize) {
+            const label = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+            label.setAttribute('x', x.toFixed(2));
+            label.setAttribute('y', y.toFixed(2));
+            label.setAttribute('fill', color);
+            label.setAttribute('font-size', fontSize);
+            label.setAttribute('font-family', 'JetBrains Mono, monospace');
+            label.setAttribute('font-weight', '600');
+            label.setAttribute('text-anchor', 'middle');
+            label.textContent = text;
+            layer.appendChild(label);
+        }
+        let currentMode = 'executionTime';
+        let selectedSection = null;
+        let currentGroupSort = 'none';
+        let currentSortDirection = 'asc';
+        let baselineRunLabel = '';
+        let visibleChartMetrics = { min: true, median: true, avg: true, p95: true, max: true };
+        let chart = null;
+        let customLabelRenderTimer = null;
+        let currentChartSeriesMeta = [];
+        function renderTable() {
+            const mode = reportModes[currentMode];
+            const head = document.getElementById('table-head');
+            head.innerHTML = '<tr><th>Section Name</th><th>Available in Runs</th><th>' + escapeHtml(getComparisonMetricHeader()) + '</th>' + renderBaselineHeaderCell() + '</tr>';
+            const body = document.getElementById('table-body');
+            body.innerHTML = comparisonSections.map((section, index) => renderComparisonRow(section, index)).join('');
+            if (!selectedSection && comparisonSections.length > 0) { selectedSection = comparisonSections[0].name; }
+            highlightSelectedRow();
+            if (window.tippy) { tippy('[data-tippy-content]', { theme: 'material' }); }
+        }
+        function renderComparisonRow(section, index) {
+            const supportedRuns = section.runs.filter(run => run[currentMode].supported);
+            const metricKey = getComparisonMetricKey();
+            const bestValue = supportedRuns.length > 0 ? Math.min(...supportedRuns.map(run => run[currentMode][metricKey])) : null;
+            const tooltipAttr = section.tooltip ? ' data-tippy-content="' + escapeHtml(section.tooltip) + '" style="font-weight: 600; color: #10b981; border-bottom: 1px dashed #334155;"' : ' style="font-weight: 600; color: #10b981;"';
+            const bestValueText = bestValue === null ? unavailableFromRuns(section.runs) : formatMetricValue(bestValue, currentMode);
+            return '<tr id="row-' + index + '" onclick="selectComparisonSectionByIndex(' + index + ')">' +
+                '<td' + tooltipAttr + '>' + escapeHtml(section.name) + '</td>' +
+                '<td>' + supportedRuns.length + ' / ' + section.runs.length + '</td>' +
+                '<td class="val">' + bestValueText + '</td>' +
+                renderBaselineValueCell(section.runs, bestValue, metricKey) +
+                '</tr>';
+        }
+        function selectComparisonSectionByIndex(index) { const section = comparisonSections[index]; if (!section) { return; } selectedSection = section.name; highlightSelectedRow(); renderComparisonChart(); }
+        function highlightSelectedRow() {
+            document.querySelectorAll('#table-body tr').forEach(row => row.classList.remove('selected'));
+            const index = comparisonSections.findIndex(section => section.name === selectedSection);
+            if (index >= 0) { const row = document.getElementById('row-' + index); if (row) { row.classList.add('selected'); } }
+        }
+        function renderComparisonChart() {
+            const section = comparisonSections.find(item => item.name === selectedSection);
+            if (!section) { return; }
+            document.getElementById('current-section-name').innerText = buildSectionDisplayName(section.name);
+            const mode = reportModes[currentMode];
+            const supportedRuns = section.runs.filter(run => run[currentMode].supported).slice();
+            if (currentGroupSort !== 'none') {
+                supportedRuns.sort((left, right) => {
+                    const delta = left[currentMode][currentGroupSort] - right[currentMode][currentGroupSort];
+                    return currentSortDirection === 'asc' ? delta : -delta;
+                });
+            }
+            const options = buildBaseChartOptions(mode, buildSectionSubtitle(section.tooltip || ''));
+            options.title.text = buildSectionChartTitle(section.name);
+            if (supportedRuns.length > 0) {
+                currentChartSeriesMeta = supportedRuns.map(run => ({ label: buildComparisonSeriesName(run), rawLabel: run.label, data: buildChartSeriesDataForRun(run[currentMode]) }));
+                options.series = buildComparisonSeries(supportedRuns);
+                options.colors = buildComparisonSeriesColors(supportedRuns);
+                options.fill = { opacity: buildComparisonSeriesOpacities(supportedRuns) };
+                options.xaxis.categories = getVisibleMetricCategories();
+                options.yaxis = { title: { text: mode.axisLabel, style: { color: '#94a3b8' } }, labels: { style: { colors: '#94a3b8' }, formatter: (v) => formatMetricValue(v, currentMode) } };
+                options.dataLabels = { enabled: false };
+                options.tooltip = { theme: 'dark', y: { formatter: (v) => formatMetricValue(v, currentMode) } };
+                if (options.series.every(series => series.data.length === 0)) { options.series = []; options.noData = { text: 'Enable at least one metric', align: 'center', verticalAlign: 'middle', style: { color: '#f8fafc' } }; }
+            } else {
+                currentChartSeriesMeta = [];
+                options.series = [];
+                options.noData = { text: unavailableFromRuns(section.runs), align: 'center', verticalAlign: 'middle', style: { color: '#f8fafc' } };
+            }
+            renderChart(options);
+        }
+        function unavailableFromRuns(runs) {
+            const unsupported = runs.find(run => run[currentMode].unavailable === 'Not Supported');
+            if (unsupported) { return 'Not Supported'; }
+            const disabled = runs.find(run => run[currentMode].unavailable === 'Disabled');
+            return disabled ? 'Disabled' : 'Unavailable';
+        }
+        function setMode(modeKey) {
+            currentMode = modeKey;
+            document.querySelectorAll('.mode-button').forEach(button => button.classList.remove('active'));
+            document.getElementById('mode-' + modeKey).classList.add('active');
+            renderTable();
+            renderComparisonChart();
+        }
+        function setGroupSort(metric) {
+            currentGroupSort = metric;
+            document.querySelectorAll('.group-sort-button').forEach(button => button.classList.remove('active'));
+            document.getElementById('group-sort-' + metric).classList.add('active');
+            renderTable();
+            renderComparisonChart();
+        }
+        function setSortDirection(direction) {
+            currentSortDirection = direction;
+            document.querySelectorAll('.group-direction-button').forEach(button => button.classList.remove('active'));
+            document.getElementById('group-direction-' + direction).classList.add('active');
+            renderComparisonChart();
+        }
+        function setBaselineRun(runLabel) {
+            baselineRunLabel = runLabel;
+            renderTable();
+            renderComparisonChart();
+        }
+        function toggleMetricVisibility(metricKey) {
+            visibleChartMetrics[metricKey] = !visibleChartMetrics[metricKey];
+            updateMetricVisibilityButtons();
+            renderComparisonChart();
+        }
+        function updateMetricVisibilityButtons() {
+            chartMetricDefinitions.forEach(metric => {
+                const button = document.getElementById('visible-metric-' + metric.key);
+                if (!button) { return; }
+                button.classList.toggle('active', !!visibleChartMetrics[metric.key]);
+            });
+        }
+        window.onload = () => { updateMetricVisibilityButtons(); setMode('executionTime'); setGroupSort('none'); setSortDirection('asc'); };
+    </script>
+</body>
+</html>
